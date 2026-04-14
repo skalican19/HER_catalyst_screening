@@ -1,0 +1,11 @@
+compounds:
+  - name: <formula matching a bulk in lookups/bulk_ids.csv>
+    vacancies:
+      - element: <element symbol to remove from surface>
+        count: <number of atoms to remove; 1 = monovacancy, 2 = paired vacancy>
+    clusters:
+      - element: <element symbol for cluster atoms>
+        count: <cluster size 1–4; adatom / dimer / triangle / square>
+    dopants:
+      - element: <substituent element symbol>
+        target: <surface element to replace; omit to replace most abundant surface element>

@@ -1,0 +1,31 @@
+compounds:
+
+  - name: MoS2
+    vacancies:
+      - element: S
+        count: 1
+      - element: S
+        count: 2
+    clusters: []
+
+  - name: MoSe2
+    vacancies:
+      - element: Se
+        count: 1
+    clusters: []
+
+  - name: MoP
+    vacancies: []
+    clusters: []
+
+  - name: Mo2N
+    vacancies: []
+    clusters: []
+
+  - name: Mo2C
+    vacancies: []
+    clusters: []
+
+  - name: MoB
+    vacancies: []
+    clusters: []

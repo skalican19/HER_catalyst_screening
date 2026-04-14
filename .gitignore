@@ -1,0 +1,9 @@
+.vscode/
+.claude/
+bulks/
+lookups/
+resources/
+adsorbml_venv/
+adsorbml_results/
+CLAUDE.md
+adsorbml_prepared.csv
