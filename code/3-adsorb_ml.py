@@ -220,12 +220,7 @@ def process_row(row, calc):
 
 
 # ── Worker process entry point ────────────────────────────────────────────────
-def worker(gpu_id, worker_idx, task_queue, out_dir):
-    # Each worker gets its own master log file for orchestration-level events
-    # (calculator load, sentinels).  Per-compound events go to run_dir/adsorbml.log.
-    log_path = os.path.join(out_dir, f"worker_gpu{gpu_id}_w{worker_idx}.log")
-    setup_logging(log_path)
-
+def worker(gpu_id, worker_idx, task_queue):
     if gpu_id is not None:
         # FAIRChemCalculator only accepts "cuda", not "cuda:N".
         # Pin this process to the right physical GPU via the environment variable.
@@ -283,7 +278,7 @@ if __name__ == "__main__":
 
         processes = [
             ctx.Process(target=worker,
-                        args=(gpu_id, i * WORKERS_PER_GPU + j, task_queue, OUT_DIR))
+                        args=(gpu_id, i * WORKERS_PER_GPU + j, task_queue))
             for i, gpu_id in enumerate(gpu_ids)
             for j in range(WORKERS_PER_GPU)
         ]
