@@ -1,8 +1,10 @@
-import os, ast, logging
+import ast
+import glob
+import logging
+import os
 from datetime import datetime
 import torch
 import multiprocessing as mp
-from pathlib import Path
 import polars as pl
 import ase.io
 from ase.optimize import LBFGS
@@ -52,6 +54,7 @@ def setup_logging(log_path: str | None = None) -> None:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _to_tuple(x):
+    """Parse a millers string like '(1, 1, 0)' into a Python tuple; return None on failure."""
     if isinstance(x, tuple):
         return x
     try:
@@ -81,7 +84,7 @@ def detect_gpus(min_free_gb=MIN_FREE_VRAM_GB):
     return [i for _, i in eligible]
 
 
-def is_done(row):
+def _is_done(row):
     run_label = os.path.splitext(os.path.basename(row["slab_file"]))[0]
     return os.path.exists(os.path.join(OUT_DIR, run_label, "candidates.csv"))
 
@@ -111,6 +114,7 @@ def _close_compound_log(comp_log: logging.Logger) -> None:
 
 
 def process_row(row, calc):
+    """Run AdsorbML for a single slab row and write candidates.csv to its run_dir."""
     slab_file = row["slab_file"]
     slab_name = row["slab_name"]
     millers   = row["millers"]
@@ -261,47 +265,43 @@ if __name__ == "__main__":
 
     # Resume: skip already-done rows
     all_rows     = list(df.iter_rows(named=True))
-    pending_rows = [r for r in all_rows if not is_done(r)]
+    pending_rows = [r for r in all_rows if not _is_done(r)]
     done_count   = len(all_rows) - len(pending_rows)
     master_log.info(f"Total: {len(all_rows)}  |  Done: {done_count}  |  Pending: {len(pending_rows)}")
 
+    if not gpu_ids:
+        gpu_ids = [None]   # worker already handles gpu_id=None → runs on CPU
+
     if pending_rows:
-        if n_workers == 1:
-            # Single worker — run in-process to avoid subprocess overhead
-            device = "cuda" if gpu_ids else "cpu"
-            calc = FAIRChemCalculator.from_model_checkpoint("uma-m-1p1", task_name="oc20", device=device)
-            for row in pending_rows:
-                process_row(row, calc)
-        else:
-            ctx        = mp.get_context("spawn")   # CUDA requires spawn, not fork
-            task_queue = ctx.Queue()
+        ctx        = mp.get_context("spawn")   # CUDA requires spawn, not fork
+        task_queue = ctx.Queue()
 
-            for row in pending_rows:
-                task_queue.put(row)
-            for _ in range(n_workers):              # one sentinel per worker
-                task_queue.put(None)
+        for row in pending_rows:
+            task_queue.put(row)
+        for _ in range(n_workers):              # one sentinel per worker
+            task_queue.put(None)
 
-            processes = [
-                ctx.Process(target=worker,
-                            args=(gpu_id, i * WORKERS_PER_GPU + j, task_queue, OUT_DIR))
-                for i, gpu_id in enumerate(gpu_ids)
-                for j in range(WORKERS_PER_GPU)
-            ]
-            for p in processes:
-                p.start()
-            for p in processes:
-                p.join()
+        processes = [
+            ctx.Process(target=worker,
+                        args=(gpu_id, i * WORKERS_PER_GPU + j, task_queue, OUT_DIR))
+            for i, gpu_id in enumerate(gpu_ids)
+            for j in range(WORKERS_PER_GPU)
+        ]
+        for p in processes:
+            p.start()
+        for p in processes:
+            p.join()
 
     # Consolidated summary (glob all candidates.csv written this run or prior)
-    all_csvs = sorted(Path(OUT_DIR).glob("*/candidates.csv"))
+    all_csvs = sorted(glob.glob(os.path.join(OUT_DIR, "*", "candidates.csv")))
     frames = []
     for csv_path in all_csvs:
         try:
             part = pl.read_csv(csv_path)
             if len(part) > 0:
                 frames.append(part)
-        except Exception:
-            pass
+        except Exception as e:
+            master_log.warning(f"Skipping {csv_path}: {e}")
 
     if frames:
         summary_df   = pl.concat(frames)
@@ -320,6 +320,6 @@ if __name__ == "__main__":
             .select(group_cols + ["E_ads_ml_eV"])
         )
         master_log.info("Best ML adsorption energies per system:")
-        master_log.info("\n" + str(best))
+        master_log.info(f"\n{best}")
     else:
         master_log.info("No results to summarise yet.")
