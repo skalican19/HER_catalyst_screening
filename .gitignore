@@ -7,3 +7,5 @@ adsorbml_venv/
 adsorbml_results/
 CLAUDE.md
 adsorbml_prepared.csv
+__pycache__/
+*.pyc
