@@ -40,7 +40,7 @@ Install into a dedicated environment:
 ```bash
 python -m venv adsorbml_venv
 source adsorbml_venv/bin/activate
-pip install fairchem-core ase polars pyyaml mp-api
+pip install -r requirements.txt
 # GPAW installation is system-specific; see https://gpaw.readthedocs.io/install.html
 ```
 
